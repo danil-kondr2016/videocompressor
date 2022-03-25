@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Сжиматель видео</string>
+    <string name="compress_file">Сжать файл</string>
+    <string name="cancel">Отменить</string>
+    <string name="canceled">Отменено</string>
+    <string name="done">Завершено</string>
+    <string name="unknown_error">Неизвестная ошибка</string>
+    <string name="error">Ошибка: %s</string>
+</resources>
