@@ -20,11 +20,8 @@ import androidx.activity.result.contract.ActivityResultContracts.GetContent
 
 import com.otaliastudios.transcoder.Transcoder
 import com.otaliastudios.transcoder.TranscoderListener
-import com.otaliastudios.transcoder.common.Size
 import com.otaliastudios.transcoder.resize.AtMostResizer
-import com.otaliastudios.transcoder.resize.Resizer
 import com.otaliastudios.transcoder.strategy.DefaultAudioStrategy
-import com.otaliastudios.transcoder.strategy.DefaultVideoStrategies
 import com.otaliastudios.transcoder.strategy.DefaultVideoStrategy
 import java.util.*
 import java.util.concurrent.Future
@@ -36,7 +33,7 @@ class MainActivity : AppCompatActivity() {
         const val WIDTH          = 176
         const val HEIGHT         = 144
         const val FRAME_RATE     = 12
-        const val VIDEO_BIT_RATE = 192000L
+        const val VIDEO_BIT_RATE = 160000L
         const val SAMPLE_RATE    = 8000
         const val CHANNELS       = 1
         const val AUDIO_BIT_RATE = 24000L
@@ -53,7 +50,19 @@ class MainActivity : AppCompatActivity() {
 
     private var task : Future<Void>? = null
 
-    fun setProgressDisplay(progress: Double) {
+    private var isProgressDisplayEnabled : Boolean = false
+
+    private fun setProgressDisplay(display : Boolean) {
+        val visibleState = if (display) VISIBLE else GONE
+
+        progressBar.visibility = visibleState
+        lProgress.visibility = visibleState
+        btnCancel.visibility = visibleState
+
+        isProgressDisplayEnabled = display
+    }
+
+    private fun setProgressState(progress: Double) {
         progressBar.progress = (progress * PROGRESS_MAX).toInt()
         lProgress.text = String.format(
             Locale.getDefault(),
@@ -112,7 +121,7 @@ class MainActivity : AppCompatActivity() {
             channels(CHANNELS)
         }.build()
 
-        btnCancel.visibility = VISIBLE
+        setProgressDisplay(true)
         task = Transcoder.into(outputFd)
             .addDataSource(inputFd)
             .setVideoTrackStrategy(videoStrategy)
@@ -120,19 +129,19 @@ class MainActivity : AppCompatActivity() {
             .setListener(
                 object : TranscoderListener {
                     override fun onTranscodeProgress(progress: Double) {
-                        setProgressDisplay(progress)
+                        setProgressState(progress)
                     }
 
                     override fun onTranscodeCompleted(successCode: Int) {
                         Toast.makeText(this@MainActivity, getString(R.string.done), LENGTH_LONG).show()
-                        btnCancel.visibility = GONE
+                        setProgressDisplay(false)
                         task = null
                     }
 
                     override fun onTranscodeCanceled() {
                         Toast.makeText(this@MainActivity, getString(R.string.canceled), LENGTH_LONG).show()
-                        btnCancel.visibility = GONE
-                        setProgressDisplay(0.0)
+                        setProgressDisplay(false)
+                        setProgressState(0.0)
                         task = null
                     }
 
@@ -144,8 +153,8 @@ class MainActivity : AppCompatActivity() {
                         else
                             text = String.format(getString(R.string.error), msg)
                         Toast.makeText(this@MainActivity, text, LENGTH_LONG).show()
-                        btnCancel.visibility = GONE
-                        setProgressDisplay(0.0)
+                        setProgressDisplay(false)
+                        setProgressState(0.0)
                         task = null
                     }
 
