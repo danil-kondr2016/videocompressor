@@ -3,8 +3,11 @@
     <string name="app_name">Сжиматель видео</string>
     <string name="compress_file">Сжать файл</string>
     <string name="cancel">Отменить</string>
-    <string name="canceled">Отменено</string>
-    <string name="done">Завершено</string>
+    <string name="canceled">Сжатие отменено</string>
+    <string name="done">Сжатие завершено</string>
     <string name="unknown_error">Неизвестная ошибка</string>
     <string name="error">Ошибка: %s</string>
+    <string name="video_is_compressing">Видео сжимается</string>
+    <string name="compress_state">Состояние сжатия</string>
+    <string name="compress_msg">Сообщения сжатия</string>
 </resources>

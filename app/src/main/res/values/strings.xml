@@ -1,9 +1,12 @@
 <resources>
     <string name="cancel">Cancel</string>
-    <string name="canceled">Canceled</string>
-    <string name="done">Done</string>
+    <string name="canceled">Compression canceled</string>
+    <string name="done">Compression completed</string>
     <string name="unknown_error">Unknown error</string>
     <string name="error">Error: %s</string>
     <string name="app_name">Video Compressor</string>
     <string name="compress_file">Compress file</string>
+    <string name="video_is_compressing">Video is compressed</string>
+    <string name="compress_state">Compress state</string>
+    <string name="compress_msg">Compress messages</string>
 </resources>

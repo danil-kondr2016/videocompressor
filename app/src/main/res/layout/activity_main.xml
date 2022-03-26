@@ -22,7 +22,7 @@
         android:layout_weight="1"
         android:textAlignment="center"
         android:textSize="20sp"
-        android:visibility="gone" />
+        android:visibility="visible" />
 
     <ProgressBar
         android:id="@+id/progress_bar"
@@ -30,7 +30,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:visibility="gone" />
+        android:visibility="visible" />
 
     <Button
         android:id="@+id/cancel_btn"
@@ -38,5 +38,5 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:text="@string/cancel"
-        android:visibility="gone" />
+        android:visibility="visible" />
 </LinearLayout>

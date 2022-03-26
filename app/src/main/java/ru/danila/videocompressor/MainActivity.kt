@@ -1,9 +1,14 @@
 package ru.danila.videocompressor
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.NotificationManager.IMPORTANCE_HIGH
+import android.app.NotificationManager.IMPORTANCE_LOW
 import android.content.ContentValues
 import android.media.*
 import android.media.MediaCodecList.REGULAR_CODECS
 import android.net.Uri
+import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.provider.MediaStore
@@ -17,6 +22,7 @@ import android.widget.Toast
 import android.widget.Toast.LENGTH_LONG
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts.GetContent
+import androidx.core.app.NotificationCompat
 
 import com.otaliastudios.transcoder.Transcoder
 import com.otaliastudios.transcoder.TranscoderListener
@@ -28,17 +34,27 @@ import java.util.concurrent.Future
 
 class MainActivity : AppCompatActivity() {
     companion object {
+        /* Progress bar parameters */
         const val PROGRESS_MAX = 10000
 
+        /* Video parameters */
         const val WIDTH          = 176
         const val HEIGHT         = 144
         const val FRAME_RATE     = 12
-        const val VIDEO_BIT_RATE = 160000L
+        const val VIDEO_BIT_RATE = 56000L
         const val SAMPLE_RATE    = 8000
         const val CHANNELS       = 1
         const val AUDIO_BIT_RATE = 24000L
-        const val I_FRAME_INTERVAL = 1F
+        const val I_FRAME_INTERVAL = 3F
+
+        /* Notification parameters */
+        const val COMPRESS_STATE_ID = "CompressState"
+        const val COMPRESS_MSG_ID = "CompressMessage"
+        const val PROGRESS_NOTIFICATION = 100
+        const val MESSAGE_NOTIFICATION  = 101
     }
+
+    private lateinit var notificationManager : NotificationManager
 
     private lateinit var codecList : MediaCodecList
     private lateinit var arCompress : ActivityResultLauncher<String>
@@ -47,6 +63,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnCancel : Button
     private lateinit var lProgress : TextView
     private lateinit var progressBar: ProgressBar
+
+    private lateinit var progressNotificationBuilder : NotificationCompat.Builder
+    private lateinit var doneNotificationBuilder : NotificationCompat.Builder
+    private lateinit var failNotificationBuilder : NotificationCompat.Builder
 
     private var task : Future<Void>? = null
 
@@ -60,6 +80,9 @@ class MainActivity : AppCompatActivity() {
         btnCancel.visibility = visibleState
 
         isProgressDisplayEnabled = display
+
+        if (!display)
+            notificationManager.cancel(PROGRESS_NOTIFICATION)
     }
 
     private fun setProgressState(progress: Double) {
@@ -69,6 +92,41 @@ class MainActivity : AppCompatActivity() {
             "%.2f%%",
             progress * 100
         )
+        progressNotificationBuilder.setProgress(
+            PROGRESS_MAX,
+            (progress * PROGRESS_MAX).toInt(),
+            false
+        )
+        notificationManager.notify(PROGRESS_NOTIFICATION, progressNotificationBuilder.build())
+    }
+
+    private fun createNotificationChannel(
+        id : String,
+        name : String,
+        importance : Int,
+        conf : (NotificationChannel) -> Unit = {}) : NotificationChannel? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(id, name, importance)
+            conf(channel)
+            notificationManager.createNotificationChannel(channel)
+            return channel
+        }
+        return null
+    }
+
+    private fun doneNotify() {
+        doneNotificationBuilder.setContentTitle(getString(R.string.done))
+        notificationManager.notify(MESSAGE_NOTIFICATION, doneNotificationBuilder.build())
+    }
+
+    private fun cancelNotify() {
+        doneNotificationBuilder.setContentTitle(getString(R.string.canceled))
+        notificationManager.notify(MESSAGE_NOTIFICATION, doneNotificationBuilder.build())
+    }
+
+    private fun failNotify(text : String) {
+        failNotificationBuilder.setContentTitle(text)
+        notificationManager.notify(MESSAGE_NOTIFICATION, failNotificationBuilder.build())
     }
 
     private fun getOutputUri(srcUri : Uri) : Uri? {
@@ -133,15 +191,15 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     override fun onTranscodeCompleted(successCode: Int) {
-                        Toast.makeText(this@MainActivity, getString(R.string.done), LENGTH_LONG).show()
                         setProgressDisplay(false)
+                        doneNotify()
                         task = null
                     }
 
                     override fun onTranscodeCanceled() {
-                        Toast.makeText(this@MainActivity, getString(R.string.canceled), LENGTH_LONG).show()
                         setProgressDisplay(false)
                         setProgressState(0.0)
+                        cancelNotify()
                         task = null
                     }
 
@@ -152,9 +210,9 @@ class MainActivity : AppCompatActivity() {
                             text = getString(R.string.unknown_error)
                         else
                             text = String.format(getString(R.string.error), msg)
-                        Toast.makeText(this@MainActivity, text, LENGTH_LONG).show()
                         setProgressDisplay(false)
                         setProgressState(0.0)
+                        failNotify(text)
                         task = null
                     }
 
@@ -174,6 +232,32 @@ class MainActivity : AppCompatActivity() {
         lProgress = findViewById(R.id.progress_text)
         progressBar = findViewById(R.id.progress_bar)
         progressBar.max = PROGRESS_MAX
+
+        notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+
+        createNotificationChannel(COMPRESS_STATE_ID, getString(R.string.compress_state), IMPORTANCE_LOW) {
+            val audioAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .build()
+            it.setSound(Uri.EMPTY, audioAttributes)
+        }
+        createNotificationChannel(COMPRESS_MSG_ID, getString(R.string.compress_msg), IMPORTANCE_HIGH)
+
+        progressNotificationBuilder = NotificationCompat.Builder(this, COMPRESS_STATE_ID).apply {
+            setContentTitle(getString(R.string.video_is_compressing))
+            setSmallIcon(android.R.drawable.stat_sys_upload)
+            setProgress(PROGRESS_MAX, 0, false)
+            setSound(Uri.EMPTY) // На всякий пожарный случай
+        }
+
+        doneNotificationBuilder = NotificationCompat.Builder(this, COMPRESS_MSG_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_upload_done)
+
+        failNotificationBuilder = NotificationCompat.Builder(this, COMPRESS_MSG_ID)
+            .setSmallIcon(android.R.drawable.stat_notify_error)
+
+        setProgressDisplay(false)
+
         arCompress = registerForActivityResult(GetContent()) { compressVideo(it) }
         btnSelect.setOnClickListener { arCompress.launch("video/*") }
         btnCancel.setOnClickListener { task?.cancel(true) }
