@@ -18,15 +18,12 @@ import android.view.View.VISIBLE
 import android.widget.Button
 import android.widget.ProgressBar
 import android.widget.TextView
-import android.widget.Toast
-import android.widget.Toast.LENGTH_LONG
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts.GetContent
 import androidx.core.app.NotificationCompat
 
 import com.otaliastudios.transcoder.Transcoder
 import com.otaliastudios.transcoder.TranscoderListener
-import com.otaliastudios.transcoder.resize.AspectRatioResizer
 import com.otaliastudios.transcoder.resize.AtMostResizer
 import com.otaliastudios.transcoder.strategy.DefaultAudioStrategy
 import com.otaliastudios.transcoder.strategy.DefaultVideoStrategy
@@ -61,7 +58,6 @@ class MainActivity : AppCompatActivity(), TranscoderListener {
     private lateinit var arCompress : ActivityResultLauncher<String>
 
     private lateinit var btnSelect : Button
-    private lateinit var btnCancel : Button
     private lateinit var lProgress : TextView
     private lateinit var progressBar: ProgressBar
 
@@ -71,7 +67,7 @@ class MainActivity : AppCompatActivity(), TranscoderListener {
 
     private var task : Future<Void>? = null
 
-    private var isProgressDisplayEnabled : Boolean = false
+    private var progressState : Boolean = false
 
     override fun onTranscodeProgress(progress: Double) {
         if (progress >= 0) {
@@ -99,13 +95,13 @@ class MainActivity : AppCompatActivity(), TranscoderListener {
     }
 
     override fun onTranscodeCompleted(successCode: Int) {
-        setProgressDisplay(false)
+        setProgressState(false)
         doneNotify()
         task = null
     }
 
     override fun onTranscodeCanceled() {
-        setProgressDisplay(false)
+        setProgressState(false)
         cancelNotify()
         task = null
     }
@@ -117,22 +113,27 @@ class MainActivity : AppCompatActivity(), TranscoderListener {
             text = getString(R.string.unknown_error)
         else
             text = String.format(getString(R.string.error), msg)
-        setProgressDisplay(false)
+        setProgressState(false)
         failNotify(text)
         task = null
     }
 
-    private fun setProgressDisplay(display : Boolean) {
-        val visibleState = if (display) VISIBLE else GONE
+    private fun setProgressState(newProgressState : Boolean) {
+        val visibleState = if (newProgressState) VISIBLE else GONE
 
         progressBar.visibility = visibleState
         lProgress.visibility = visibleState
-        btnCancel.visibility = visibleState
 
-        isProgressDisplayEnabled = display
+        if (newProgressState) {
+            btnSelect.setText(R.string.cancel)
+        } else {
+            btnSelect.setText(R.string.compress_file)
+        }
 
-        if (!display)
+        if (!newProgressState)
             notificationManager.cancel(PROGRESS_NOTIFICATION)
+
+        progressState = newProgressState
     }
 
     private fun createNotificationChannel(
@@ -214,7 +215,7 @@ class MainActivity : AppCompatActivity(), TranscoderListener {
             channels(CHANNELS)
         }.build()
 
-        setProgressDisplay(true)
+        setProgressState(true)
         task = Transcoder.into(outputFd)
             .addDataSource(inputFd)
             .setVideoTrackStrategy(videoStrategy)
@@ -229,7 +230,6 @@ class MainActivity : AppCompatActivity(), TranscoderListener {
 
         codecList = MediaCodecList(REGULAR_CODECS)
         btnSelect = findViewById(R.id.select_btn)
-        btnCancel = findViewById(R.id.cancel_btn)
 
         lProgress = findViewById(R.id.progress_text)
         progressBar = findViewById(R.id.progress_bar)
@@ -254,23 +254,25 @@ class MainActivity : AppCompatActivity(), TranscoderListener {
             COMPRESS_STATE_ID)
             .apply {
             setContentTitle(getString(R.string.video_is_compressing))
-            setSmallIcon(android.R.drawable.stat_sys_upload)
+            setSmallIcon(R.drawable.ic_baseline_video_library_24)
             setProgress(PROGRESS_MAX, 0, false)
             setSound(Uri.EMPTY) // На всякий пожарный случай
         }
 
         doneNotificationBuilder = NotificationCompat.Builder(this, COMPRESS_MSG_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_upload_done)
+            .setSmallIcon(R.drawable.ic_baseline_video_library_24)
 
         failNotificationBuilder = NotificationCompat.Builder(this, COMPRESS_MSG_ID)
             .setSmallIcon(android.R.drawable.stat_notify_error)
 
-        setProgressDisplay(false)
-
+        setProgressState(false)
         arCompress = registerForActivityResult(GetContent()) { compressVideo(it) }
-        btnSelect.setOnClickListener { arCompress.launch("video/*") }
-        btnCancel.setOnClickListener { task?.cancel(true) }
+        btnSelect.setOnClickListener {
+            if (!progressState) {
+                arCompress.launch("video/*")
+            } else {
+                task?.cancel(true)
+            }
+        }
     }
-
-
 }
