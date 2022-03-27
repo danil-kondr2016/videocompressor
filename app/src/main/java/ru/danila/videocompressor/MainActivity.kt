@@ -26,13 +26,14 @@ import androidx.core.app.NotificationCompat
 
 import com.otaliastudios.transcoder.Transcoder
 import com.otaliastudios.transcoder.TranscoderListener
+import com.otaliastudios.transcoder.resize.AspectRatioResizer
 import com.otaliastudios.transcoder.resize.AtMostResizer
 import com.otaliastudios.transcoder.strategy.DefaultAudioStrategy
 import com.otaliastudios.transcoder.strategy.DefaultVideoStrategy
 import java.util.*
 import java.util.concurrent.Future
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), TranscoderListener {
     companion object {
         /* Progress bar parameters */
         const val PROGRESS_MAX = 10000
@@ -72,6 +73,55 @@ class MainActivity : AppCompatActivity() {
 
     private var isProgressDisplayEnabled : Boolean = false
 
+    override fun onTranscodeProgress(progress: Double) {
+        if (progress >= 0) {
+            progressBar.isIndeterminate = false
+            progressBar.progress = (progress * PROGRESS_MAX).toInt()
+            lProgress.text = String.format(
+                Locale.getDefault(),
+                "%.2f%%",
+                progress * 100
+            )
+            progressNotificationBuilder.setProgress(
+                PROGRESS_MAX,
+                (progress * PROGRESS_MAX).toInt(),
+                false
+            )
+        } else {
+            progressBar.isIndeterminate = true
+            progressNotificationBuilder.setProgress(PROGRESS_MAX, 0, true)
+        }
+
+        notificationManager.notify(
+            PROGRESS_NOTIFICATION,
+            progressNotificationBuilder.build()
+        )
+    }
+
+    override fun onTranscodeCompleted(successCode: Int) {
+        setProgressDisplay(false)
+        doneNotify()
+        task = null
+    }
+
+    override fun onTranscodeCanceled() {
+        setProgressDisplay(false)
+        cancelNotify()
+        task = null
+    }
+
+    override fun onTranscodeFailed(exception: Throwable) {
+        val msg : String? = exception.localizedMessage
+        var text : String = ""
+        if (msg == null)
+            text = getString(R.string.unknown_error)
+        else
+            text = String.format(getString(R.string.error), msg)
+        setProgressDisplay(false)
+        failNotify(text)
+        task = null
+    }
+
     private fun setProgressDisplay(display : Boolean) {
         val visibleState = if (display) VISIBLE else GONE
 
@@ -83,21 +133,6 @@ class MainActivity : AppCompatActivity() {
 
         if (!display)
             notificationManager.cancel(PROGRESS_NOTIFICATION)
-    }
-
-    private fun setProgressState(progress: Double) {
-        progressBar.progress = (progress * PROGRESS_MAX).toInt()
-        lProgress.text = String.format(
-            Locale.getDefault(),
-            "%.2f%%",
-            progress * 100
-        )
-        progressNotificationBuilder.setProgress(
-            PROGRESS_MAX,
-            (progress * PROGRESS_MAX).toInt(),
-            false
-        )
-        notificationManager.notify(PROGRESS_NOTIFICATION, progressNotificationBuilder.build())
     }
 
     private fun createNotificationChannel(
@@ -184,40 +219,7 @@ class MainActivity : AppCompatActivity() {
             .addDataSource(inputFd)
             .setVideoTrackStrategy(videoStrategy)
             .setAudioTrackStrategy(audioStrategy)
-            .setListener(
-                object : TranscoderListener {
-                    override fun onTranscodeProgress(progress: Double) {
-                        setProgressState(progress)
-                    }
-
-                    override fun onTranscodeCompleted(successCode: Int) {
-                        setProgressDisplay(false)
-                        doneNotify()
-                        task = null
-                    }
-
-                    override fun onTranscodeCanceled() {
-                        setProgressDisplay(false)
-                        setProgressState(0.0)
-                        cancelNotify()
-                        task = null
-                    }
-
-                    override fun onTranscodeFailed(exception: Throwable) {
-                        val msg : String? = exception.localizedMessage
-                        var text : String = ""
-                        if (msg == null)
-                            text = getString(R.string.unknown_error)
-                        else
-                            text = String.format(getString(R.string.error), msg)
-                        setProgressDisplay(false)
-                        setProgressState(0.0)
-                        failNotify(text)
-                        task = null
-                    }
-
-                }
-            )
+            .setListener(this)
             .transcode()
     }
 
@@ -235,7 +237,11 @@ class MainActivity : AppCompatActivity() {
 
         notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
-        createNotificationChannel(COMPRESS_STATE_ID, getString(R.string.compress_state), IMPORTANCE_LOW) {
+        createNotificationChannel(
+            COMPRESS_STATE_ID,
+            getString(R.string.compress_state),
+            IMPORTANCE_LOW
+        ) {
             val audioAttributes = AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_NOTIFICATION)
                 .build()
@@ -243,7 +249,10 @@ class MainActivity : AppCompatActivity() {
         }
         createNotificationChannel(COMPRESS_MSG_ID, getString(R.string.compress_msg), IMPORTANCE_HIGH)
 
-        progressNotificationBuilder = NotificationCompat.Builder(this, COMPRESS_STATE_ID).apply {
+        progressNotificationBuilder = NotificationCompat.Builder(
+            this,
+            COMPRESS_STATE_ID)
+            .apply {
             setContentTitle(getString(R.string.video_is_compressing))
             setSmallIcon(android.R.drawable.stat_sys_upload)
             setProgress(PROGRESS_MAX, 0, false)
@@ -262,4 +271,6 @@ class MainActivity : AppCompatActivity() {
         btnSelect.setOnClickListener { arCompress.launch("video/*") }
         btnCancel.setOnClickListener { task?.cancel(true) }
     }
+
+
 }
